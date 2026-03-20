@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Voice Assistant - Open Websites & Search</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #000;
+      background: linear-gradient(135deg, #000000 0%, #111117 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #4efcfe;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid #0ff;
+      border-radius: 15px;
+      box-shadow: 0 0 20px #0ff, 0 0 60px #0ff;
+      padding: 30px;
+      position: relative;
+      z-index: 3;
+    }
+    h1 { color: #4efcfe; margin-bottom: 10px; font-size: 28px; text-shadow: 0 0 8px #4efcfe; }
+    .subtitle { color: #0ff; margin-bottom: 20px; font-size: 14px; }
+    .status-bar {
+      display: flex; gap: 30px; padding: 15px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 10px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .status-item { display: flex; gap: 8px; align-items: center; }
+    .status-label { font-weight: 600; color: #cfe1ff; }
+    .status-value { color: #667eea; font-weight: 700; }
+    .button-group { display: flex; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
+    button {
+      padding: 12px 20px; font-size: 14px; border-radius: 8px;
+      border: 1px solid #0ff; cursor: pointer; font-weight: 600;
+      transition: all 0.3s ease; text-transform: uppercase;
+      letter-spacing: 0.5px; background: rgba(0,255,255,0.1);
+      color: #0ff; box-shadow: 0 0 8px #0ff;
+    }
+    #startBtn {
+      background: #0ff;
+      color: #000;
+    }
+    #startBtn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    #stopBtn { background: #f00; color: #000; }
+    #stopBtn:hover:not(:disabled) { background: #c00; transform: translateY(-2px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .info-box {
+      background: rgba(0,255,255,0.05);
+      border-left: 4px solid #0ff;
+      padding: 15px; border-radius: 8px; margin-bottom: 20px;
+      font-size: 13px; color: #0ff; line-height: 1.6;
+    }
+    .info-box strong { color: #667eea; }
+    #log {
+      background: rgba(0,0,0,0.6);
+      border: 1px solid #0ff; border-radius: 10px;
+      padding: 15px; color: #4efcfe;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      box-shadow: 0 0 8px #0ff;
+    }
+    .log-entry {
+      padding: 8px; margin: 4px 0; border-radius: 4px;
+      border-left: 3px solid #0ff;
+      background: rgba(0,0,0,0.4);
+      color: #0ff;
+    }
+    .log-entry.cmd { border-left-color: #0f0; }
+    .log-entry.info { border-left-color: #0ff; }
+    .log-entry.error {
+      border-left-color: #f00;
+      background: rgba(255,0,0,0.2);
+      color: #f88;
+    }
+    .website-list h3 {
+      color: #f3f7ff; margin-bottom: 15px; font-size: 16px;
+    }
+    .websites {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px;
+    }
+    .website-tag {
+      color: #cfe1ff; padding: 8px 12px; border-radius: 6px;
+      font-size: 12px; cursor: default;
+      border: 1px solid rgba(102,126,234,0.12);
+      background: rgba(255,255,255,0.035);
+    }
+    .website-tag:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: #667eea;
+    }
+    /* scrollbars */
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+    ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #999; }
+    /* background canvas */
+    #bgCanvas {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      z-index: 0; pointer-events: none; display: block;
+    }
+    body > .container { position: relative; z-index: 3; }
+    /* Quick Launch Dock */
+    .quick-dock {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: 18px; display: flex; gap: 8px; padding: 10px 12px;
+      background: rgba(255,255,255,0.06); border-radius: 44px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.18); z-index: 9999;
+      align-items: center; backdrop-filter: blur(6px); max-width: 92%;
+    }
+    .dock-arrow {
+      width: 36px; height: 36px; display: inline-flex;
+      align-items: center; justify-content: center;
+      border-radius: 12px; background: #fff;
+      border: 1px solid rgba(0,0,0,0.06); cursor: pointer;
+      user-select: none; box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      font-size: 18px;
+    }
+    .dock-scroll {
+      display: flex; gap: 8px; overflow-x: auto;
+      padding: 6px; scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+    }
+    .dock-item {
+      flex: 0 0 auto; display: flex; gap: 8px;
+      align-items: center; padding: 8px 12px;
+      border-radius: 28px; cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+      user-select: none; border: 1px solid rgba(0,0,0,0.06);
+      background: linear-gradient(180deg, #fff 0%, #fbfbfb 100%);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+      font-size: 13px; color: #222; min-width: 110px;
+      justify-content: flex-start;
+    }
+    .dock-item:hover {
+      transform: translateY(-6px) scale(1.02);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.14);
+    }
+    .dock-icon {
+      width: 28px; height: 28px; display:inline-flex;
+      align-items:center;justify-content:center;border-radius:8px;
+      background:linear-gradient(135deg,#667eea,#764ba2);
+      color:white;font-weight:700;font-size:14px;
+    }
+    .dock-label {
+      max-width: 140px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .dock-search {
+      display:flex; gap:8px; align-items:center; margin-left:8px;
+    }
+    .dock-search input {
+      padding:8px 10px; border-radius:8px; border:1px solid #ddd;
+      width:180px;
+    }
+    .dock-search button {
+      padding:8px 10px; border-radius:8px; border:none;
+      background:#667eea; color:#fff; cursor:pointer;
+    }
+
+    /* overlay panels */
+    .overlay {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: #4efcfe;
+      font-family: monospace;
+      font-size: 14px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.4);
+      padding: 10px;
+      border: 1px solid #4efcfe;
+      border-radius: 8px;
+    }
+    .overlay.news {
+      left: auto;
+      right: 20px;
+      max-width: 250px;
+    }
+    .overlay.news p {
+      margin: 4px 0;
+    }
+
+    /* navigation bar at top of container */
+    .top-nav {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .top-nav a {
+      color: #0ff;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .top-nav a:hover { background: rgba(0,255,255,0.2); }
+
+    /* modal styling */
+    .modal {
+      position: fixed; top:0; left:0; right:0; bottom:0;
+      background: rgba(0,0,0,0.75);
+      display: flex; align-items:center; justify-content:center;
+      z-index: 10000;
+      visibility: hidden; opacity: 0;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+    .modal.show { visibility: visible; opacity: 1; }
+    .modal-content {
+      background: rgba(6,10,20,0.9); padding: 24px; border-radius: 12px;
+      width: 300px; max-width: 90%; color: #cfe1ff;
+    }
+    .modal-content input {
+      width: 100%; padding: 8px; margin-bottom: 12px;
+      border:1px solid #444; border-radius:6px; background: #111;
+      color:#fff;
+    }
+    .modal-content button {
+      width: 100%; padding: 10px; background: #667eea;
+      color:#fff; border:none; border-radius:6px; cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bgCanvas" aria-hidden="true"></canvas>
+
+  <!-- overlays for info and news -->
+  <div id="infoOverlay" class="overlay"></div>
+  <div id="newsOverlay" class="overlay news"></div>
+
+  <!-- login modal -->
+  <div id="loginModal" class="modal">
+    <div class="modal-content">
+      <h2>Login</h2>
+      <div id="loginBody"></div>
+      <button id="loginBtn">Continue</button>
+    </div>
+  </div>
+  <!-- generic popup modal -->
+  <div id="genericModal" class="modal">
+    <div class="modal-content" id="genericModalContent"></div>
+  </div>
+
+  <div class="container">
+    <nav class="top-nav">
+      <a href="#" id="navHome">Home</a>
+      <a href="#" id="navChat">Chat</a>
+      <a href="#" id="navNotes">Notes</a>
+      <a href="#" id="navSettings">Settings</a>
+      <a href="#" id="navLogout" style="display:none;">Logout</a>
+    </nav>
+    <h1>🎤 Voice Assistant</h1>
+    <p class="subtitle">Say "open [website]" or "search [query]"</p>
+
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-label">Status:</span>
+        <span class="status-value" id="statusText">Idle</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Listening:</span>
+        <span class="status-value" id="listeningText">No</span>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button id="startBtn">🎤 Start Listening</button>
+      <button id="stopBtn" disabled>⏹ Stop Listening</button>
+    </div>
+
+    <div class="warning-box" id="browserWarning" style="display:none;">
+      ⚠️ <strong>Browser Update Needed:</strong> Your browser may not support voice commands. Please use Chrome, Edge, or Firefox for best results.
+    </div>
+
+    <div class="info-box">
+      <strong>📝 Commands Available:</strong><br>
+      💬 "open youtube" → Opens YouTube<br>
+      💬 "open gmail" → Opens Gmail<br>
+      💬 "search for [query]" → Google search<br>
+      💬 "what time is it" → Current time<br>
+      💬 "open [any website]" → Opens the website or searches Google<br>
+      <strong>Note:</strong> Allow microphone access when prompted!
+    </div>
+
+    <div id="log" aria-live="polite"></div>
+
+    <div class="media-section" style="margin-top:20px;">
+      <h3>▶ Media Controls</h3>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button id="playBtn">Play</button>
+        <button id="pauseBtn">Pause</button>
+        <button id="stopMediaBtn">Stop</button>
+        <div style="margin-left:10px;color:#444;">Now playing: <span id="nowPlaying">Nothing</span></div>
+      </div>
+      <audio id="sampleAudio" src="" preload="none" style="display:none;">Your browser does not support audio element.</audio>
+    </div>
+
+    <!-- schedule section hidden because time/weather moved to overlay -->
+    <div class="schedule-section" style="display:none;">
+      <h3>⏰ Clock & Schedule</h3>
+      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+        <div>Local time: <strong id="clockText">--:--:--</strong></div>
+        <div>
+          <button id="showAlarmsBtn">Show Alarms</button>
+          <button id="clearAlarmsBtn">Clear All Alarms</button>
+        </div>
+      </div>
+      <div id="alarmsList" style="margin-top:10px;font-size:13px;color:#333;"></div>
+    </div>
+
+    <div class="website-list">
+      <h3>✓ Supported Websites</h3>
+      <div class="websites" id="websitesList"></div>
+    </div>
+  </div>
+
+  <!-- chat page -->
+  <div id="chatPage" style="display:none; padding:20px;">
+    <h2>Chat</h2>
+    <div id="friendsList"></div>
+    <button id="addFriendBtn">Add Friend</button>
+    <div id="chatArea" style="margin-top:20px; max-height:400px; overflow-y:auto; background:rgba(0,0,0,0.3); padding:10px;"></div>
+  </div>
+
+  <!-- notes page -->
+  <div id="notesPage" style="display:none; padding:20px;">
+    <h2>Notes</h2>
+    <textarea id="noteInput" style="width:100%;height:100px;background:rgba(0,0,0,0.3);color:#0ff;padding:10px;border:1px solid #0ff;border-radius:6px;"></textarea>
+    <button id="saveNoteBtn" style="margin-top:8px;">Save Note</button>
+    <div id="notesList" style="margin-top:20px;max-height:400px;overflow-y:auto;"></div>
+  </div>
+
+  <script>
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const logEl = document.getElementById('log');
+      const statusText = document.getElementById('statusText');
+      const listeningText = document.getElementById('listeningText');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const websitesListEl = document.getElementById('websitesList');
+      const browserWarning = document.getElementById('browserWarning');
+      
+      let recognition;
+
+      // Website database with shortcuts
+      const websites = {
+        'youtube': 'https://www.youtube.com',
+        'youtube music': 'https://music.youtube.com',
+        'gmail': 'https://mail.google.com',
+        'google': 'https://www.google.com',
+        'bing': 'https://www.bing.com',
+        'duckduckgo': 'https://duckduckgo.com',
+        'yahoo': 'https://www.yahoo.com',
+        'github': 'https://github.com',
+        'gitlab': 'https://gitlab.com',
+        'npm': 'https://www.npmjs.com',
+        'stack overflow': 'https://stackoverflow.com',
+        'stackoverflow': 'https://stackoverflow.com',
+        'twitter': 'https://twitter.com',
+        'x': 'https://x.com',
+        'facebook': 'https://www.facebook.com',
+        'instagram': 'https://www.instagram.com',
+        'linkedin': 'https://www.linkedin.com',
+        'reddit': 'https://www.reddit.com',
+        'whatsapp': 'https://web.whatsapp.com',
+        'discord': 'https://discord.com',
+        'twitch': 'https://www.twitch.tv',
+        'spotify': 'https://www.spotify.com',
+        'soundcloud': 'https://soundcloud.com',
+        'netflix': 'https://www.netflix.com',
+        'amazon': 'https://www.amazon.com',
+        'ebay': 'https://www.ebay.com',
+        'wikipedia': 'https://www.wikipedia.org',
+        'imdb': 'https://www.imdb.com',
+        'chatgpt': 'https://chat.openai.com',
+        'gemini': 'https://gemini.google.com',
+        'claude': 'https://claude.ai',
+        'microsoft': 'https://www.microsoft.com',
+        'apple': 'https://www.apple.com',
+        'google drive': 'https://drive.google.com',
+        'google docs': 'https://docs.google.com',
+        'notion': 'https://www.notion.so',
+        'canva': 'https://www.canva.com',
+        'figma': 'https://www.figma.com',
+        'medium': 'https://medium.com',
+        'pinterest': 'https://www.pinterest.com',
+        'quora': 'https://www.quora.com',
+        'slideshare': 'https://www.slideshare.net',
+        'w3schools': 'https://www.w3schools.com',
+        'mozilla': 'https://www.mozilla.org',
+        'techcrunch': 'https://techcrunch.com',
+        'bbc': 'https://www.bbc.com',
+        'cnn': 'https://www.cnn.com'
+      };
+
+      // Display supported websites
+      function displayWebsites() {
+        websitesListEl.innerHTML = Object.keys(websites)
+          .map(name => `<div class="website-tag">${name}</div>`)
+          .join('');
+      }
+      displayWebsites();
+
+      // Quick Launch Dock: clickable items that open sites with arrows and search
+      function renderQuickDock() {
+        let dock = document.getElementById('quickDock');
+        if (!dock) {
+          dock = document.createElement('div');
+          dock.id = 'quickDock';
+          dock.className = 'quick-dock';
+          document.body.appendChild(dock);
+        }
+        dock.innerHTML = '';
+
+        // Left arrow
+        const left = document.createElement('div');
+        left.className = 'dock-arrow';
+        left.innerHTML = '&#9664;';
+        dock.appendChild(left);
+
+        // Scrollable container
+        const sc = document.createElement('div');
+        sc.className = 'dock-scroll';
+        sc.id = 'dockScroll';
+        dock.appendChild(sc);
+
+        // Add items
+        Object.keys(websites).forEach(name => {
+          const item = document.createElement('div');
+          item.className = 'dock-item';
+          item.setAttribute('role','button');
+          item.setAttribute('title', `Open ${name}`);
+          const icon = document.createElement('div');
+          icon.className = 'dock-icon';
+          const emojiMap = {
+            'youtube':'▶','youtube music':'♪','gmail':'✉️','google':'🔎','bing':'🔎','duckduckgo':'🦆','github':'🐙','twitter':'🐦','x':'✖','facebook':'📘','instagram':'📸','linkedin':'🔗','reddit':'👽','spotify':'🎵','netflix':'🎬','amazon':'🛒','wikipedia':'📚','chatgpt':'🤖','discord':'💬','twitch':'🎮','imdb':'🎞️','medium':'✒️','pinterest':'📌','quora':'❓','stackoverflow':'🧩'
+          };
+          icon.textContent = emojiMap[name] || name[0].toUpperCase();
+          const label = document.createElement('div');
+          label.className = 'dock-label';
+          label.textContent = name;
+          item.appendChild(icon);
+          item.appendChild(label);
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const url = websites[name];
+            if (url) window.open(url, '_blank'); else window.open('https://www.google.com/search?q=' + encodeURIComponent(name), '_blank');
+          });
+          sc.appendChild(item);
+        });
+
+        // Right arrow
+        const right = document.createElement('div');
+        right.className = 'dock-arrow';
+        right.innerHTML = '&#9654;';
+        dock.appendChild(right);
+
+        // Search box
+        const searchWrap = document.createElement('div');
+        searchWrap.className = 'dock-search';
+        const input = document.createElement('input');
+        input.type = 'search';
+        input.placeholder = 'Search or open...';
+        const btn = document.createElement('button');
+        btn.textContent = 'Go';
+        searchWrap.appendChild(input);
+        searchWrap.appendChild(btn);
+        dock.appendChild(searchWrap);
+
+        // Arrow actions: scroll the scroll container
+        left.addEventListener('click', () => sc.scrollBy({ left: -220, behavior: 'smooth' }));
+        right.addEventListener('click', () => sc.scrollBy({ left: 220, behavior: 'smooth' }));
+
+        // Keyboard: press enter in input to open
+        btn.addEventListener('click', () => {
+          const q = input.value.trim();
+          if (!q) return;
+          const key = q.toLowerCase().trim();
+          if (websites[key]) window.open(websites[key], '_blank'); else window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
+        });
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+
+        // Allow wheel/trackpad scrolling inside dock
+        sc.addEventListener('wheel', (e) => { if (Math.abs(e.deltaX) < Math.abs(e.deltaY)) { e.preventDefault(); sc.scrollBy({ left: e.deltaY, behavior: 'auto' }); } });
+      }
+      renderQuickDock();
+
+      // --- navigation, login and modal helpers ---
+      let isLoggedIn = false;
+
+      function updateNav() {
+        const logoutLink = document.getElementById('navLogout');
+        if (logoutLink) logoutLink.style.display = isLoggedIn ? 'inline-block' : 'none';
+      }
+
+      function disableUI(dis) {
+        startBtn.disabled = dis;
+        stopBtn.disabled = dis;
+        const container = document.querySelector('.container');
+        if (container) {
+          container.style.pointerEvents = dis ? 'none' : 'auto';
+          container.style.filter = dis ? 'blur(2px)' : '';
+        }
+      }
+
+      function showLogin() {
+        const lm = document.getElementById('loginModal');
+        if (lm) lm.classList.add('show');
+        disableUI(true);
+      }
+      function hideLogin() {
+        const lm = document.getElementById('loginModal');
+        if (lm) lm.classList.remove('show');
+        disableUI(false);
+      }
+
+      function checkLogin() {
+        if (localStorage.getItem('isLoggedIn')) {
+          isLoggedIn = true;
+          updateNav();
+          showHome();
+        } else {
+          showLogin();
+        }
+      }
+
+      // generic modal usage
+      function showModal(html) {
+        const gm = document.getElementById('genericModal');
+        const content = document.getElementById('genericModalContent');
+        if (content) content.innerHTML = html;
+        if (gm) gm.classList.add('show');
+      }
+      function hideModal() {
+        const gm = document.getElementById('genericModal');
+        if (gm) gm.classList.remove('show');
+      }
+      document.addEventListener('click', (e) => {
+        const gm = document.getElementById('genericModal');
+        if (gm && gm.classList.contains('show') && e.target === gm) hideModal();
+      });
+
+      // event handlers for login and nav
+      // --- enhanced login flow ---
+      let currentLoginUser = '';
+      let loginStep = 'username'; // 'username' | 'password' | 'setPassword'
+
+      function generateStrongPassword() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+        let pw = '';
+        for (let i = 0; i < 12; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
+        return pw;
+      }
+
+      function showLoginStep(step, user) {
+        loginStep = step;
+        const body = document.getElementById('loginBody');
+        let html = '';
+        switch (step) {
+          case 'username':
+            html = '<p>Please enter your username:</p>' +
+                   '<input type="text" id="loginUser" placeholder="Username">';
+            break;
+          case 'password':
+            html = '<p>Welcome back, ' + (user || '') + '. Enter your password:</p>' +
+                   '<input type="password" id="loginPass" placeholder="Password"><br/>' +
+                   '<label><input type="checkbox" id="showPassChk"> Show password</label>';
+            break;
+          case 'setPassword':
+            const suggestion = generateStrongPassword();
+            html = '<p>Create a new password for ' + (user || '') + ':</p>' +
+                   '<input type="password" id="newPass" placeholder="New password"><br/>' +
+                   '<small>A strong password suggestion:</small><br/>' +
+                   '<pre style="background:#222;padding:6px;border-radius:4px;color:#8f8;">' + suggestion + '</pre>' +
+                   '<p style="font-size:12px;color:#ccc;">By setting a password you agree to the disclaimer above.</p>' +
+                   '<label><input type="checkbox" id="agreeChk"> I agree to the <a href="#" onclick="return false;">terms and disclaimer</a></label>';
+            break;
+        }
+        if (body) body.innerHTML = html;
+        // change button text
+        const btn = document.getElementById('loginBtn');
+        if (btn) {
+          btn.textContent = step === 'setPassword' ? 'Save' : 'Next';
+        }
+        // autofocus first input
+        const first = body ? body.querySelector('input') : null;
+        if (first) first.focus();
+        // attach events if needed
+        if (step === 'password') {
+          const chk = document.getElementById('showPassChk');
+          if (chk) chk.addEventListener('change', () => {
+            const pi = document.getElementById('loginPass');
+            if (pi) pi.type = chk.checked ? 'text' : 'password';
+          });
+        }
+      }
+
+      function handleLoginButton() {
+        if (loginStep === 'username') {
+          const user = document.getElementById('loginUser').value.trim();
+          if (!user) return;
+          currentLoginUser = user;
+          const stored = localStorage.getItem('va_user_' + user);
+          if (stored) {
+            // user exists, ask for password
+            showLoginStep('password', user);
+          } else {
+            // new user
+            showLoginStep('setPassword', user);
+          }
+        } else if (loginStep === 'password') {
+          const pass = document.getElementById('loginPass').value;
+          const stored = JSON.parse(localStorage.getItem('va_user_' + currentLoginUser) || '{}');
+          if (stored.password === pass) {
+            // correct
+            localStorage.setItem('isLoggedIn','1');
+            isLoggedIn = true;
+            hideLogin();
+            updateNav();
+            showHome();
+          } else {
+            // wrong password – require new one
+            alert('Password incorrect. Please choose a new password to continue.');
+            showLoginStep('setPassword', currentLoginUser);
+            return; // wait for new password before logging in
+          }
+        } else if (loginStep === 'setPassword') {
+          const newP = document.getElementById('newPass').value;
+          const agree = document.getElementById('agreeChk').checked;
+          if (!newP || !agree) return;
+          const user = currentLoginUser || document.getElementById('loginUser').value.trim();
+          localStorage.setItem('va_user_' + user, JSON.stringify({ password: newP }));
+          localStorage.setItem('isLoggedIn','1');
+          isLoggedIn = true;
+          hideLogin();
+          updateNav();
+          showHome();
+        }
+      }
+
+      const loginBtnEl = document.getElementById('loginBtn');
+      if (loginBtnEl) {
+        loginBtnEl.addEventListener('click', handleLoginButton);
+      }
+
+      // start with username step
+      showLoginStep('username');
+
+      const navHome = document.getElementById('navHome');
+      if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); hideModal(); showHome(); });
+
+      // friend button
+      const addFriendBtnEl = document.getElementById('addFriendBtn');
+      if (addFriendBtnEl) addFriendBtnEl.addEventListener('click', addFriend);
+
+      const navSettings = document.getElementById('navSettings');
+      if (navSettings) navSettings.addEventListener('click', (e) => {
+        e.preventDefault();
+        showModal('<h3>Settings</h3><p>Change password:</p><input type="password" id="newPass" placeholder="New password"><button id="savePass">Save</button>');
+        const saveBtn = document.getElementById('savePass');
+        if (saveBtn) saveBtn.addEventListener('click', () => {
+          const np = document.getElementById('newPass').value;
+          if (np) {
+            localStorage.setItem('va_pass', np);
+            hideModal();
+            showModal('<p>Password saved. Log out and log back in.</p>');
+          }
+        });
+      });
+
+      const navLogout = document.getElementById('navLogout');
+      if (navLogout) navLogout.addEventListener('click', (e) => {
+        e.preventDefault();
+        localStorage.removeItem('isLoggedIn');
+        isLoggedIn = false;
+        showLogin();
+      });
+
+      // initial check
+      checkLogin();
+
+      function log(kind, message) {
+        const div = document.createElement('div');
+        div.className = `log-entry ${kind}`;
+        div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logEl.prepend(div);
+        console.log(kind, message);
+      }
+
+      // --- chat / friend system ---
+      function getFriends() {
+        try { return JSON.parse(localStorage.getItem('va_friends')||'[]'); } catch { return []; }
+      }
+      function saveFriends(f) { localStorage.setItem('va_friends', JSON.stringify(f)); }
+
+      // --- notes system ---
+      function getNotes() {
+        try { return JSON.parse(localStorage.getItem('va_notes')||'[]'); } catch { return []; }
+      }
+      function saveNotes(n) { localStorage.setItem('va_notes', JSON.stringify(n)); }
+      function renderNotes() {
+        const nl = document.getElementById('notesList');
+        if (!nl) return;
+        const notes = getNotes();
+        nl.innerHTML = notes.map(n=>`<div style="border-bottom:1px solid #0ff;padding:4px 0;">${n}</div>`).join('');
+      }
+      function showNotes() {
+        document.querySelector('.container').style.display='none';
+        const cp = document.getElementById('chatPage'); if(cp) cp.style.display='none';
+        const np = document.getElementById('notesPage'); if(np) np.style.display='block';
+        renderNotes();
+      }
+      function showHome() {
+        document.querySelector('.container').style.display = '';
+        const cp = document.getElementById('chatPage'); if (cp) cp.style.display='none';
+        const np = document.getElementById('notesPage'); if(np) np.style.display='none';
+      }
+      document.getElementById('saveNoteBtn')?.addEventListener('click',()=>{
+        const t = document.getElementById('noteInput').value.trim();
+        if(!t) return;
+        const ns = getNotes(); ns.unshift(t);
+        saveNotes(ns);
+        document.getElementById('noteInput').value='';
+        renderNotes();
+      });
+
+      function showHome() {
+        document.querySelector('.container').style.display = '';
+        const cp = document.getElementById('chatPage'); if (cp) cp.style.display='none';
+      }
+      function showChat() {
+        document.querySelector('.container').style.display = 'none';
+        const cp = document.getElementById('chatPage'); if (cp) cp.style.display='block';
+        renderFriendList();
+      }
+
+      function renderFriendList() {
+        const fl = document.getElementById('friendsList');
+        if (!fl) return;
+        const friends = getFriends();
+        fl.innerHTML = '';
+        friends.forEach(name=>{
+          const b = document.createElement('button');
+          b.textContent = name;
+          b.style.display='block';
+          b.style.margin='4px 0';
+          b.addEventListener('click',()=>openConversation(name));
+          fl.appendChild(b);
+        });
+      }
+
+      function addFriend() {
+        const name = prompt('Enter friend name');
+        if (!name) return;
+        const friends = getFriends();
+        if (!friends.includes(name)) {
+          friends.push(name);
+          saveFriends(friends);
+          renderFriendList();
+        }
+      }
+
+      function getMessages(name) {
+        try { return JSON.parse(localStorage.getItem('va_chat_'+name) || '[]'); } catch { return []; }
+      }
+      function saveMessages(name, msgs) { localStorage.setItem('va_chat_'+name, JSON.stringify(msgs)); }
+
+      function openConversation(name) {
+        const area = document.getElementById('chatArea');
+        if (!area) return;
+        area.innerHTML = `<h3>Chat with ${name}</h3>`;
+        const msgs = getMessages(name);
+        msgs.forEach(m=>{
+          const d = document.createElement('div');
+          d.textContent = `${m.time} ${m.from}: ${m.text}`;
+          area.appendChild(d);
+        });
+        const inp = document.createElement('input');
+        inp.type='text'; inp.style.width='80%'; inp.placeholder='Type a message';
+        const btn = document.createElement('button'); btn.textContent='Send';
+        btn.addEventListener('click',()=>{
+          const text = inp.value.trim(); if(!text) return;
+          const now = new Date().toLocaleTimeString();
+          msgs.push({time:now,from:'me',text});
+          saveMessages(name,msgs);
+          openConversation(name);
+        });
+        area.appendChild(inp); area.appendChild(btn);
+      }
+
+      // hook navigation
+      const navChat = document.getElementById('navChat');
+      if (navChat) navChat.addEventListener('click',(e)=>{e.preventDefault(); showChat();});
+      const navNotes = document.getElementById('navNotes');
+      if (navNotes) navNotes.addEventListener('click',(e)=>{e.preventDefault(); showNotes();});
+
+      // Process voice command
+      function processCommand(cmd) {
+        const c = String(cmd || '').toLowerCase().trim();
+        log('cmd', `Heard: "${c}"`);
+
+        // Scheduled YouTube playback: "play <query> on youtube at 1:32 pm"
+        const timeGlobal = c.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+        if ((c.startsWith('play ') || c.startsWith('open ')) && c.includes('youtube') && timeGlobal) {
+          // parse time
+          const timestr = timeGlobal[0];
+          const alarmDate = parseTimeString(timestr);
+          if (!alarmDate) { log('error','Could not parse time for scheduled playback.'); }
+          else {
+            // extract query: remove play/open, remove 'on youtube' and time portion
+            let q = c.replace(/^(play|open)\s+/i,'').replace(/on\s+youtube/i,'').replace(timestr,'').replace(/at\s*/i,'').trim();
+            if (!q) q = 'popular';
+            scheduleAlarm(alarmDate.getTime(), `Play ${q} on YouTube`, Date.now(), { type: 'youtube', query: q });
+            log('info', `Scheduled YouTube playback for ${alarmDate.toLocaleString()} → ${q}`);
+            return;
+          }
+        }
+
+        // Media: play / pause / stop
+        if (c === 'play' || c.startsWith('play ')) {
+          // If user asked to play on YouTube: "play youtube <name>" or "open youtube <name>"
+          if (c.startsWith('play youtube') || c.startsWith('play youtube ')) {
+            const q = c.replace(/^play youtube\s*/,'').trim();
+            if (q) { openYouTube(q); } else { openWebsiteOrSearch('youtube'); }
+            return;
+          }
+          // General play - play local audio if present
+          if (sampleAudio && sampleAudio.src) {
+            sampleAudio.play();
+            nowPlayingEl.textContent = sampleAudio.src.split('/').pop();
+            log('info','Playing media');
+          } else {
+            log('error','No local media loaded. Say "open youtube <name>" to open it on YouTube.');
+          }
+          return;
+        }
+
+        if (c === 'pause' || c.startsWith('pause')) {
+          if (sampleAudio && !sampleAudio.paused) { sampleAudio.pause(); log('info','Paused media'); } else { log('error','No media is playing'); }
+          return;
+        }
+
+        if (c === 'stop' || c === 'stop media') {
+          if (sampleAudio) { sampleAudio.pause(); sampleAudio.currentTime = 0; nowPlayingEl.textContent = 'Nothing'; log('info','Stopped media'); } else { log('error','No media to stop'); }
+          return;
+        }
+
+        // Open YouTube and search for a media name: "open youtube <name>"
+        if (c.startsWith('open youtube ') || c.startsWith('open youtube')) {
+          const q = c.replace(/^open youtube\s*/,'').trim();
+          if (q) { openYouTube(q); } else { openWebsiteOrSearch('youtube'); }
+          return;
+        }
+
+        // Notes/chat voice commands
+        if (c.startsWith('note ') || c.startsWith('take note')) {
+          let t = c.replace(/^(note|take note)\s*/,'').trim();
+          if (t) {
+            const notes = getNotes();
+            notes.unshift(t);
+            saveNotes(notes);
+            renderNotes();
+            log('info','Note saved via voice.');
+          }
+          return;
+        }
+        if (c === 'show notes' || c === 'open notes') {
+          showNotes();
+          return;
+        }
+        if (c.startsWith('add friend')) {
+          const name = c.replace(/add friend\s*/,'').trim();
+          if (name) {
+            const f = getFriends(); if (!f.includes(name)) { f.push(name); saveFriends(f); }
+            renderFriendList();
+            log('info',`Added friend ${name}`);
+          }
+          return;
+        }
+        if (c.startsWith('chat with')) {
+          const name = c.replace(/chat with\s*/,'').trim();
+          if (name) {
+            if (!getFriends().includes(name)) {
+              const f = getFriends(); f.push(name); saveFriends(f);
+            }
+            openConversation(name);
+            showChat();
+            log('info',`Chat opened with ${name}`);
+          }
+          return;
+        }
+        // Scheduling: set alarm / reminder
+        if (c.startsWith('set alarm') || c.startsWith('set reminder') || c.startsWith('schedule ')) {
+          // Try to find time like '6:30 pm' or '18:30' or '7 pm'
+          const timeMatch = c.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+          if (timeMatch) {
+            let hr = parseInt(timeMatch[1],10);
+            const min = parseInt(timeMatch[2] || '0',10);
+            const ampm = (timeMatch[3] || '').toLowerCase();
+            if (ampm) {
+              if (ampm === 'pm' && hr < 12) hr += 12;
+              if (ampm === 'am' && hr === 12) hr = 0;
+            }
+            const now = new Date();
+            let alarmTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hr, min, 0, 0);
+            if (alarmTime <= now) alarmTime.setDate(alarmTime.getDate()+1);
+            const message = c.replace(/.*?(?:at\s*)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*/i,'').trim() || 'Alarm';
+            scheduleAlarm(alarmTime.getTime(), message, Date.now());
+            log('info', `Alarm set for ${alarmTime.toLocaleString()} (${message})`);
+          } else {
+            log('error','Could not find a time. Example: "set alarm at 6:30 pm to study"');
+          }
+          return;
+        }
+
+        // Show alarms
+        if (c === 'show alarms' || c === 'alarms' || c === 'show reminders') {
+          renderAlarms();
+          return;
+        }
+
+        // Search commands
+        if (c.startsWith('search for ') || c.startsWith('search ')) {
+          const query = c.replace(/^(search for |search )/, '').trim();
+          if (query) { searchGoogle(query); } else { log('error', 'Please specify what to search for.'); }
+          return;
+        }
+
+        // Time command
+        if (c.includes('time') || c.includes('what is the time')) {
+          const time = new Date().toLocaleTimeString();
+          log('info', `Current time: ${time}`);
+          return;
+        }
+
+        // Open website or search (fallback)
+        if (c.startsWith('open ')) {
+          const target = c.substring(5).trim();
+          openWebsiteOrSearch(target, true);
+          return;
+        }
+
+        // Default: treat as search query
+        if (c.length > 2) { log('info', `Treating as search query...`); searchGoogle(c); }
+      }
+
+      function openWebsiteOrSearch(target, isFromOpen = false) {
+        if (!target) return;
+        // Work on a mutable copy
+        let raw = String(target).toLowerCase().trim();
+
+        // Replace spoken ' dot ' with '.' (handles speech-to-text like "youtube dot com")
+        raw = raw.replace(/\s+dot\s+/g, '.');
+
+        // Remove common words that may appear from speech recognition
+        raw = raw.replace(/\s+dotcom\b/g, '.com');
+        raw = raw.replace(/\s+dot org\b/g, '.org');
+
+        // Remove any trailing punctuation or stray slashes/dots
+        raw = raw.replace(/[\s\/]$|\.$/, '');
+
+        // If user said things like 'open youtube.com' or 'youtube.' this normalizes
+        const cleaned = raw.replace(/\.(com|org|net|io|co|tv|app|dev|info|biz|us|uk)\b/gi, '').trim();
+
+        // Normalize spaces (e.g. 'stack  overflow' -> 'stack overflow')
+        const normalized = cleaned.replace(/\s+/g, ' ');
+
+        // If we have an exact match in the websites map, open that URL
+        if (websites[normalized]) {
+          const url = websites[normalized];
+          window.open(url, '_blank');
+          log('cmd', `✓ Opened: ${normalized} → ${url}`);
+          return;
+        }
+
+        // If the original raw value already contains a dot (user provided a domain-like input), open it as URL
+        // but make sure it doesn't end with a dot and has a TLD — otherwise append '.com'
+        if (raw.includes('.') ) {
+          let url = raw;
+          // If it ends with a dot, remove it
+          url = url.replace(/\.$/, '');
+          // If it looks like a hostname without protocol, add https://
+          if (!/^https?:\/\//i.test(url)) {
+            url = 'https://' + url;
+          }
+          // If the hostname has no TLD (no dot after removing trailing dot), append .com
+          try {
+            const hostname = (new URL(url)).hostname;
+            if (!/\.[a-z]{2,}$/i.test(hostname)) {
+              // append .com to hostname
+              const fixed = url.replace(hostname, hostname + '.com');
+              url = fixed;
+            }
+          } catch (e) {
+            // ignore URL parsing errors
+          }
+          window.open(url, '_blank');
+          log('cmd', `✓ Opened URL: ${url}`);
+          return;
+        }
+
+        // Otherwise, treat as known name or fallback to Google search
+        if (websites[normalized]) {
+          const url = websites[normalized];
+          window.open(url, '_blank');
+          log('cmd', `✓ Opened (fallback): ${normalized} → ${url}`);
+          return;
+        }
+
+        log('search', `"${target}" not found. Searching Google...`);
+        searchGoogle(target);
+      }
+
+      function searchGoogle(query) {
+        const url = 'https://www.google.com/search?q=' + encodeURIComponent(query);
+        window.open(url, '_blank');
+        log('search', `🔍 Searching Google for: "${query}"`);
+      }
+
+      // --- Media controls and Scheduling helpers ---
+      const sampleAudio = document.getElementById('sampleAudio');
+      const nowPlayingEl = document.getElementById('nowPlaying');
+      const playBtn = document.getElementById('playBtn');
+      const pauseBtn = document.getElementById('pauseBtn');
+      const stopMediaBtn = document.getElementById('stopMediaBtn');
+      const alarmsListEl = document.getElementById('alarmsList');
+      const showAlarmsBtn = document.getElementById('showAlarmsBtn');
+      const clearAlarmsBtn = document.getElementById('clearAlarmsBtn');
+
+      // Info & data overlays (time, weather, battery)
+      function initInfoOverlay() {
+        const el = document.getElementById('infoOverlay');
+        let weatherText = '';
+        let batteryLevel = '';
+        function render() {
+          const d = new Date();
+          if (el) {
+            el.innerHTML = `<div>Time: ${d.toLocaleTimeString()}</div>` +
+                           `<div>Weather: ${weatherText}</div>` +
+                           `<div>Battery: ${batteryLevel}</div>` +
+                           `<div>Info: ${navigator.platform || 'unknown'}</div>`;
+          }
+        }
+        // battery
+        if (navigator.getBattery) {
+          navigator.getBattery().then(b => {
+            const updateBattery = () => {
+              batteryLevel = `${Math.round(b.level * 100)}%` + (b.charging ? ' (charging)' : '');
+              render();
+            };
+            updateBattery();
+            b.onlevelchange = updateBattery;
+            b.onchargingchange = updateBattery;
+          }).catch(()=>{});
+        }
+        // weather (simple wttr.in lookup)
+        function updateWeather() {
+          fetch('https://wttr.in/?format=3').then(r=>r.text()).then(t=>{ weatherText = t; render(); }).catch(()=>{});
+        }
+        updateWeather();
+        setInterval(() => { updateWeather(); }, 3600000);
+
+        setInterval(render, 1000);
+      }
+
+      // News side overlay
+      function initNewsOverlay() {
+        const el = document.getElementById('newsOverlay');
+        const newsItems = [
+          'Breaking: AI assistant goes interstellar.',
+          'Weather update available every hour.',
+          'New satellite deployed into orbit.',
+          'UFO sighted above the city at dawn.',
+          'ISS beams down live data stream.',
+          'Astronauts train for lunar mission.',
+          'Solar flare predicted in 2 hours.',
+          'Tech news: Quantum chip breakthrough.'
+        ];
+        let idx = 0;
+        function showNext() {
+          if (!el) return;
+          el.innerHTML = `<p>${newsItems[idx]}</p>`;
+          idx = (idx + 1) % newsItems.length;
+          setTimeout(() => { el.innerHTML = ''; setTimeout(showNext, 2000); }, 18000);
+        }
+        showNext();
+      }
+
+      initInfoOverlay();
+      initNewsOverlay();
+
+      // Parse a time string like '1:32 pm' or '18:30' into a Date (next occurrence)
+      function parseTimeString(timestr) {
+        const m = String(timestr || '').match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+        if (!m) return null;
+        let hr = parseInt(m[1],10);
+        const min = parseInt(m[2] || '0',10);
+        const ampm = (m[3] || '').toLowerCase();
+        if (ampm) {
+          if (ampm === 'pm' && hr < 12) hr += 12;
+          if (ampm === 'am' && hr === 12) hr = 0;
+        }
+        const now = new Date();
+        let dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hr, min, 0, 0);
+        if (dt <= now) dt.setDate(dt.getDate() + 1);
+        return dt;
+      }
+
+      // Alarms storage
+      const alarmsKey = 'vh_alarms';
+      function loadAlarms() {
+        try { return JSON.parse(localStorage.getItem(alarmsKey) || '[]'); } catch { return []; }
+      }
+      function saveAlarms(list) { localStorage.setItem(alarmsKey, JSON.stringify(list)); }
+
+      // Render alarms
+      function renderAlarms() {
+        const list = loadAlarms();
+        if (list.length === 0) {
+          alarmsListEl.textContent = 'No alarms scheduled.';
+          return;
+        }
+        alarmsListEl.innerHTML = list.map(a => {
+          const t = new Date(a.time).toLocaleString();
+          const action = a.action ? (` → ${a.action.type}${a.action.query ? (': ' + a.action.query) : ''}`) : '';
+          return `<div style="padding:6px;border-bottom:1px solid #eee;">${t} — ${a.msg}${action}</div>`;
+        }).join('');
+      }
+      renderAlarms();
+
+      // Schedule an alarm (supports optional action object)
+      function scheduleAlarm(timeMs, msg, id, action) {
+        const list = loadAlarms();
+        const alarm = { time: timeMs, msg: msg || 'Alarm', id: id || Date.now(), action: action || null };
+        list.push(alarm);
+        saveAlarms(list);
+        renderAlarms();
+        const delay = timeMs - Date.now();
+        if (delay > 0) {
+          setTimeout(() => {
+            // perform action if present
+            if (alarm.action && alarm.action.type === 'youtube') {
+              log('info', `⏰ Playing scheduled YouTube: ${alarm.action.query}`);
+              openYouTube(alarm.action.query);
+            } else {
+              log('info', `⏰ Alarm: ${alarm.msg}`);
+              try { new Notification('Voice Assistant', { body: alarm.msg }); } catch (e) {}
+            }
+            // remove alarm after firing
+            const l2 = loadAlarms().filter(x => x.id !== alarm.id);
+            saveAlarms(l2);
+            renderAlarms();
+          }, delay);
+        }
+      }
+
+      // Try to restore timeouts for existing alarms on load
+      (function restoreAlarms() {
+        const list = loadAlarms();
+        list.forEach(a => {
+          const delay = a.time - Date.now();
+          if (delay > 0) {
+            setTimeout(() => {
+              if (a.action && a.action.type === 'youtube') {
+                log('info', `⏰ Playing scheduled YouTube: ${a.action.query}`);
+                openYouTube(a.action.query);
+              } else {
+                log('info', `⏰ Alarm: ${a.msg}`);
+                try { new Notification('Voice Assistant', { body: a.msg }); } catch (e) {}
+              }
+              const l2 = loadAlarms().filter(x => x.id !== a.id);
+              saveAlarms(l2);
+              renderAlarms();
+            }, delay);
+          }
+        });
+      })();
+
+      // Buttons
+      if (playBtn) playBtn.addEventListener('click', () => { if (sampleAudio.src) { sampleAudio.play(); nowPlayingEl.textContent = sampleAudio.src.split('/').pop(); log('info','Playing media'); } else log('error','No local media loaded. Use "open youtube <name>" to open on YouTube.'); });
+      if (pauseBtn) pauseBtn.addEventListener('click', () => { if (!sampleAudio.paused) { sampleAudio.pause(); log('info','Paused media'); } });
+      if (stopMediaBtn) stopMediaBtn.addEventListener('click', () => { sampleAudio.pause(); sampleAudio.currentTime = 0; nowPlayingEl.textContent = 'Nothing'; log('info','Stopped media'); });
+      if (showAlarmsBtn) showAlarmsBtn.addEventListener('click', renderAlarms);
+      if (clearAlarmsBtn) clearAlarmsBtn.addEventListener('click', () => { saveAlarms([]); renderAlarms(); log('info','Cleared all alarms'); });
+
+      // Open YouTube search for a query (user asked to open media on YouTube)
+      function openYouTube(query) {
+        const q = String(query || '').trim();
+        if (!q) { openWebsiteOrSearch('youtube'); return; }
+        const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
+        window.open(url, '_blank');
+        log('cmd', `Opened YouTube search for: ${q}`);
+      }
+
+      // Animated background: Jarvis‑style space scene with moving entities
+      (function animatedBackground() {
+        const canvas = document.getElementById('bgCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let W, H;
+        let gridSpacing = 40;
+        let offset = 0;
+        let rings = [];
+        let entities = [];
+
+        function regen() {
+          W = canvas.width = window.innerWidth;
+          H = canvas.height = window.innerHeight;
+          rings = [];
+          entities = [];
+          const types = ['satellite','iss','ufo','astronaut','planet','sun','earth'];
+          for (let i=0;i<30;i++) {
+            const type = types[Math.floor(Math.random()*types.length)];
+            entities.push({
+              x: Math.random()*W,
+              y: Math.random()*H,
+              dx: (Math.random()*2-1)*0.5,
+              dy: (Math.random()*2-1)*0.5,
+              type: type,
+              size: Math.random()*5+3
+            });
+          }
+        }
+
+        window.addEventListener('resize', regen);
+        regen();
+
+        function drawEntity(e) {
+          ctx.save();
+          ctx.translate(e.x, e.y);
+          switch(e.type) {
+            case 'satellite':
+              ctx.fillStyle='#fff'; ctx.fillRect(-e.size,e.size/2,e.size*2,e.size/2);break;
+            case 'iss':
+              ctx.fillStyle='#0ff'; ctx.fillRect(-e.size*2,-e.size/2,e.size*4,e.size);break;
+            case 'ufo':
+              ctx.fillStyle='#0ff'; ctx.beginPath();ctx.arc(0,0,e.size*2,0,Math.PI);ctx.fill(); ctx.fillRect(-e.size*1.5,0,e.size*3, e.size/2);break;
+            case 'astronaut':
+              ctx.fillStyle='#fff'; ctx.beginPath();ctx.arc(0,0,e.size,0,Math.PI*2);ctx.fill(); break;
+            case 'planet':
+              ctx.fillStyle='#0ff'; ctx.beginPath();ctx.arc(0,0,e.size*3,0,Math.PI*2);ctx.fill();break;
+            case 'sun':
+              ctx.fillStyle='#ff0'; ctx.beginPath();ctx.arc(0,0,e.size*4,0,Math.PI*2);ctx.fill();break;
+            case 'earth':
+              ctx.fillStyle='#4efcfe'; ctx.beginPath();ctx.arc(0,0,e.size*3,0,Math.PI*2);ctx.fill();break;
+          }
+          ctx.restore();
+        }
+
+        function draw() {
+          // background
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, W, H);
+
+          // moving grid
+          ctx.strokeStyle = 'rgba(0,255,255,0.1)';
+          ctx.lineWidth = 1;
+          for (let x = offset % gridSpacing; x < W; x += gridSpacing) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+          }
+          for (let y = offset % gridSpacing; y < H; y += gridSpacing) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+          }
+          offset += 0.3;
+
+          // pulse rings
+          if (Math.random() < 0.01) {
+            rings.push({ x: Math.random() * W, y: Math.random() * H, r: 0 });
+          }
+          rings.forEach((r, i) => {
+            r.r += 2;
+            const alpha = 1 - r.r / 400;
+            if (alpha <= 0) { rings.splice(i, 1); return; }
+            ctx.strokeStyle = `rgba(0,255,255,${alpha})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+            ctx.stroke();
+          });
+
+          // draw moving entities
+          entities.forEach(e => {
+            e.x += e.dx; e.y += e.dy;
+            if (e.x < 0) e.x = W; if (e.x > W) e.x = 0;
+            if (e.y < 0) e.y = H; if (e.y > H) e.y = 0;
+            drawEntity(e);
+          });
+
+          // central radar circle
+          ctx.strokeStyle = 'rgba(0,255,255,0.3)';
+          ctx.lineWidth = 2;
+          const cx=W/2, cy=H/2;
+          ctx.beginPath(); ctx.arc(cx,cy,80,0,Math.PI*2); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cx-10,cy); ctx.lineTo(cx+10,cy); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cx,cy-10); ctx.lineTo(cx,cy+10); ctx.stroke();
+
+          requestAnimationFrame(draw);
+        }
+        draw();
+      })();
+
+
+      // Initialize Speech Recognition
+      if (!SpeechRecognition) {
+        browserWarning.style.display = 'block';
+        log('error', '❌ Speech Recognition not supported! Use Chrome, Edge, or Firefox.');
+        startBtn.disabled = true;
+      } else {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onstart = () => {
+          statusText.textContent = '🎙️ Listening...';
+          listeningText.textContent = '✓ Yes';
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+          log('info', '🎤 Listening... Please speak your command');
+        };
+
+        recognition.onresult = (event) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          if (transcript) {
+            processCommand(transcript);
+          }
+        };
+
+        recognition.onerror = (event) => {
+          const errorMsg = {
+            'no-speech': 'No speech detected. Please try again.',
+            'network': 'Network error. Check your internet connection.',
+            'permission-denied': 'Microphone permission denied. Please allow access in browser settings.',
+            'audio-capture': 'No microphone found. Please check your device.',
+            'not-allowed': 'Microphone access denied by user or browser.'
+          };
+          const msg = errorMsg[event.error] || `Error: ${event.error}`;
+          log('error', `❌ ${msg}`);
+        };
+
+        recognition.onend = () => {
+          statusText.textContent = 'Ready';
+          listeningText.textContent = 'No';
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        };
+
+        startBtn.addEventListener('click', () => {
+          try {
+            recognition.start();
+          } catch (e) {
+            log('error', 'Could not start listening: ' + e.message);
+          }
+        });
+
+        stopBtn.addEventListener('click', () => {
+          recognition.stop();
+        });
+
+        log('info', '✅ Voice Assistant Ready! Click "Start Listening" to begin.');
+      }
+
+    } catch (error) {
+      console.error('Fatal error:', error);
+      document.body.innerHTML = '<div style="padding:20px;"><h2>Error loading Voice Assistant</h2><p>' + error.message + '</p></div>';
+    }
+  </script>
+</body>
+</html>
